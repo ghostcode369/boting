@@ -1,22 +1,11 @@
-
-# Replace with your actual Telegram Bot Token from BotFather
-# API_TOKEN = 'YOUR_BOT_API_TOKEN'
-# API_TOKEN = '7773653937:AAFrGnpGw-2LZ6WI1KZwKMhCKgl4XfWtcpw'
-# python bot/reminder_bot.py
 import logging
+import json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 import pytz
-import asyncio
-import nest_asyncio
-
-# Apply nest_asyncio to fix the event loop issue
-nest_asyncio.apply()
-
-# Your API Token
-API_TOKEN = '7773653937:AAFrGnpGw-2LZ6WI1KZwKMhCKgl4XfWtcpw'
+import os
 
 # Set up logging
 logging.basicConfig(
@@ -24,6 +13,9 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Your API Token (Set this in your Vercel environment variables)
+API_TOKEN = os.getenv("API_TOKEN")
 
 # List to store reminders
 reminders = []
@@ -81,56 +73,19 @@ def send_reminders(application: Application):
             )
             reminders.remove(reminder)
 
-async def main():
-    # Create the Application with your bot token
+async def handler(request):
+    """Main handler for Vercel."""
+    body = await request.json()  # Get the JSON body sent to Vercel
+    update = Update.de_json(body, Application.builder().token(API_TOKEN).build().bot)
+
     application = Application.builder().token(API_TOKEN).build()
 
-    # Add handlers for commands
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("setreminder", set_reminder))
-    application.add_handler(CommandHandler("viewreminders", view_reminders))
+    # Handle commands
+    await application.process_update(update)
 
-    # Set up a scheduler to check reminders every minute
+    # Scheduler job
     scheduler = BackgroundScheduler()
     scheduler.add_job(lambda: send_reminders(application), 'interval', seconds=60)
     scheduler.start()
 
-    # Start polling for updates from Telegram
-    await application.run_polling()
-
-if __name__ == '__main__':
-    # Now use asyncio.run with nest_asyncio to allow it in a nested loop environment
-    asyncio.run(main())
-async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Parse the input and store a reminder."""
-    try:
-        # Ensure that there are enough arguments (date, time, message)
-        if len(context.args) < 2:
-            await update.message.reply_text(
-                "Error: Please provide both date and time followed by the reminder message.\n"
-                "Usage: /setreminder <YYYY-MM-DD HH:MM> <message>"
-            )
-            return
-        
-        reminder_time_str = " ".join(context.args[:-1])  # Combine date and time as one string
-        message = context.args[-1]  # The last argument is the message
-
-        # Try parsing the date and time from the string
-        reminder_time = datetime.strptime(reminder_time_str, "%Y-%m-%d %H:%M")
-        local_timezone = pytz.timezone("Africa/Addis_Ababa")
-        reminder_time = local_timezone.localize(reminder_time)
-
-        reminders.append({
-            "time": reminder_time,
-            "message": message,
-            "chat_id": update.message.chat_id
-        })
-
-        await update.message.reply_text(
-            f"Reminder set for {reminder_time.strftime('%Y-%m-%d %H:%M')} to: {message}"
-        )
-    except Exception as e:
-        await update.message.reply_text(
-            "Error: Invalid input format. Please use the format: /setreminder <YYYY-MM-DD HH:MM> <message>"
-        )
-        logger.error(f"Error: {e}")
+    return json.dumps({'status': 'ok'})

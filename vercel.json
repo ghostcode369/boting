@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/reminder.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "env": {
+    "API_TOKEN": "your-bot-api-token"
+  }
+}
